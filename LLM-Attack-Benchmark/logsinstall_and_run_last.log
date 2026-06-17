@@ -1,0 +1,65 @@
+﻿**********************
+Windows PowerShell 轉譯開始
+開始時間: 20260612162025
+使用者名稱: DESKTOP-3CD4TN5\10801
+RunAs 使用者: DESKTOP-3CD4TN5\10801
+設定名稱: 
+電腦: DESKTOP-3CD4TN5 (Microsoft Windows NT 10.0.26200.0)
+主應用程式: powershell -NoProfile -ExecutionPolicy Bypass -Command try { Start-Transcript -Path 'C:\Users\10801\Downloads\LLM-Attack-Benchmark-case-level-report-fixed\LLM-Attack-Benchmark\logsinstall_and_run_last.log' -Force | Out-Null; & 'C:\Users\10801\Downloads\LLM-Attack-Benchmark-case-level-report-fixed\LLM-Attack-Benchmark\install_and_run.ps1' ; $rc=$LASTEXITCODE; if ($null -eq $rc) { $rc=0 } } catch { Write-Host $_ -ForegroundColor Red; $rc=1 } finally { try { Stop-Transcript | Out-Null } catch {} }; exit $rc
+處理序識別碼: 20040
+PSVersion: 5.1.26100.8655
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8655
+BuildVersion: 10.0.26100.8655
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+========================================
+LLM Attack Benchmark One-click Setup
+========================================
+[INFO]  Project root: C:\Users\10801\Downloads\LLM-Attack-Benchmark-case-level-report-fixed\LLM-Attack-Benchmark
+
+========================================
+Python 3.9.6 Check
+========================================
+[OK]    Python 3.9.6 found: C:\Users\10801\AppData\Local\Programs\Python\Python39\python.exe
+
+========================================
+Virtual Environment
+========================================
+[OK]    venv ready: C:\Users\10801\Downloads\LLM-Attack-Benchmark-case-level-report-fixed\LLM-Attack-Benchmark\.venv\Scripts\python.exe
+Python 3.9.6
+
+========================================
+Python Dependencies
+========================================
+Requirement already satisfied: pip in .\.venv\lib\site-packages (26.0.1)
+0->-r C:\Users\10801\Downloads\LLM-Attack-Benchmark-case-level-r
+eport-fixed\LLM-Attack-Benchmark\requirements.txt (line 4)) (3.2
+3.1)
+Requirement already satisfied: six>=1.5 in .\.venv\lib\site-pack
+ages (from python-dateutil>=2.8.2->pandas<2.3,>=2.0.0->-r C:\Use
+rs\10801\Downloads\LLM-Attack-Benchmark-case-level-report-fixed\
+LLM-Attack-Benchmark\requirements.txt (line 3)) (1.17.0)
+[INFO]  Installing optional Google Sheets sync dependencies...
+
+[OK]    Google Sheets sync dependencies installed.
+[OK]    Dependencies installed.
+
+========================================
+Ollama
+========================================
+[OK]    Ollama found.
+
+
+========================================
+Ollama Server
+========================================
+[OK]    Ollama API is reachable: http://127.0.0.1:11434
+
+========================================
+Launch Tool UI
+========================================

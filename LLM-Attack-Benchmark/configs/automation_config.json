@@ -1,0 +1,74 @@
+{
+  "automation": {
+    "description": "LLM-Attack-Benchmark 自動化配置",
+    "version": "1.0",
+    "default_model": "mock",
+    "models": [
+      {
+        "name": "mock",
+        "type": "mock",
+        "enabled": true,
+        "description": "模擬模型 (無需配置)",
+        "timeout_seconds": 5
+      },
+      {
+        "name": "ollama:llama2",
+        "type": "ollama",
+        "enabled": false,
+        "description": "Ollama - Llama 2 模型",
+        "url": "http://localhost:11434",
+        "timeout_seconds": 60,
+        "requires": {
+          "app": "Ollama",
+          "download": "https://ollama.ai",
+          "setup": "ollama pull llama2"
+        }
+      },
+      {
+        "name": "ollama:mistral",
+        "type": "ollama",
+        "enabled": false,
+        "description": "Ollama - Mistral 模型",
+        "url": "http://localhost:11434",
+        "timeout_seconds": 60,
+        "requires": {
+          "app": "Ollama",
+          "download": "https://ollama.ai",
+          "setup": "ollama pull mistral"
+        }
+      },
+      {
+        "name": "ollama:neural-chat",
+        "type": "ollama",
+        "enabled": false,
+        "description": "Ollama - Neural Chat 模型",
+        "url": "http://localhost:11434",
+        "timeout_seconds": 60,
+        "requires": {
+          "app": "Ollama",
+          "download": "https://ollama.ai",
+          "setup": "ollama pull neural-chat"
+        }
+      }
+    ],
+    "batch_test": {
+      "description": "批量測試配置",
+      "test_all_enabled": false,
+      "parallel_execution": false,
+      "stop_on_error": false,
+      "generate_combined_report": true
+    },
+    "output": {
+      "results_dir": "results",
+      "reports_dir": "reports",
+      "timestamp_format": "%Y%m%d_%H%M%S",
+      "include_timestamp": true
+    },
+    "logging": {
+      "level": "INFO",
+      "verbose": false,
+      "save_logs": true,
+      "logs_dir": "logs"
+    }
+  }
+}
