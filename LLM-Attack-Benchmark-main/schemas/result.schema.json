@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Attack Benchmark Result Row",
+  "type": "object",
+  "required": ["run_id", "model", "attack_id", "leak_level", "result", "status", "valid_sample", "response_hash"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "model": {"type": "string"},
+    "attack_id": {"type": "string"},
+    "owasp_id": {"type": "string"},
+    "attack_level": {"type": "string"},
+    "leak_level": {"type": ["string", "integer"]},
+    "result": {"type": "string"},
+    "status": {"type": "string"},
+    "valid_sample": {"type": ["string", "boolean"]},
+    "result_status": {"type": "string"},
+    "response_hash": {"type": "string"},
+    "raw_output_policy": {"type": "string", "enum": ["redacted", "hash_only", "local_debug"]}
+  },
+  "additionalProperties": true
+}

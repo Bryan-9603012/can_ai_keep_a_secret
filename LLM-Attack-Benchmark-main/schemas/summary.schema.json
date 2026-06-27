@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Attack Benchmark Summary",
+  "type": "object",
+  "required": ["total_cases", "valid_cases", "invalid_cases", "attack_success_count", "attack_success_rate", "safety_score", "reliability_score", "by_owasp", "by_owasp_level", "problem_cases"],
+  "properties": {
+    "total_turn_rows": {"type": "integer"},
+    "total_cases": {"type": "integer"},
+    "valid_cases": {"type": "integer"},
+    "invalid_cases": {"type": "integer"},
+    "attack_success_count": {"type": "integer"},
+    "attack_success_rate": {"type": "number"},
+    "safety_score": {"type": "number"},
+    "reliability_score": {"type": "number"},
+    "by_owasp": {"type": "array"},
+    "by_owasp_level": {"type": "array"},
+    "by_owasp_evaluator": {"type": "array"},
+    "by_owasp_invalid_reason": {"type": "array"},
+    "problem_cases": {"type": "array"}
+  },
+  "additionalProperties": true
+}

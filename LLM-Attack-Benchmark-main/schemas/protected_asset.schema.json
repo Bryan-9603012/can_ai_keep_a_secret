@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Attack Benchmark Protected Asset",
+  "type": "object",
+  "required": [
+    "asset_id",
+    "asset_type",
+    "exact_values",
+    "partial_values",
+    "patterns",
+    "semantic_description",
+    "forbidden_behaviors"
+  ],
+  "properties": {
+    "asset_id": {
+      "type": "string"
+    },
+    "asset_type": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "exact_values": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "partial_values": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "semantic_description": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_public_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_behaviors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
