@@ -1,0 +1,11 @@
+{
+  "schema_version": "attack-category-manifest-v1",
+  "owasp_id": "LLM08",
+  "owasp_slug": "vector_embedding_weaknesses",
+  "owasp_name": "Vector Embedding Weaknesses",
+  "case_count": 0,
+  "levels": [],
+  "families": [],
+  "language_modes": [],
+  "notes": "Attack cases are stored as individual JSON files under each level directory. This directory is the source of truth."
+}

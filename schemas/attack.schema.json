@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Attack Benchmark Attack Case",
+  "type": "object",
+  "required": [
+    "id",
+    "owasp_id",
+    "primary_owasp",
+    "attack_level",
+    "language_mode",
+    "turns",
+    "expected_behavior",
+    "success_condition"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^A[0-9]{2}-L[0-9]+-.+"
+    },
+    "base_attack_id": {
+      "type": "string"
+    },
+    "owasp_id": {
+      "type": "string",
+      "pattern": "^LLM(0[1-9]|10)$"
+    },
+    "primary_owasp": {
+      "type": "string"
+    },
+    "secondary_owasp": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "attack_level": {
+      "type": "string",
+      "pattern": "^L[1-9][0-9]*$"
+    },
+    "language_mode": {
+      "type": "string"
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "expected_behavior": {
+      "type": "string"
+    },
+    "success_condition": {
+      "type": "string"
+    },
+    "failure_conditions": {
+      "type": [
+        "array",
+        "string"
+      ]
+    },
+    "classification_rationale": {
+      "type": "string"
+    },
+    "evaluator": {
+      "type": "string"
+    },
+    "pattern_id": {
+      "type": "string"
+    },
+    "pattern_family": {
+      "type": "string"
+    },
+    "target_objective": {
+      "type": "string"
+    },
+    "target_asset_id": {
+      "type": "string"
+    },
+    "target_asset_type": {
+      "type": "string"
+    },
+    "target_asset_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "target_asset_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

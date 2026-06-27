@@ -1,0 +1,29 @@
+{
+  "schema_version": "attack-category-manifest-v1",
+  "owasp_id": "LLM07",
+  "owasp_slug": "system_prompt_leakage",
+  "owasp_name": "System Prompt Leakage",
+  "case_count": 120,
+  "levels": [
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "L5",
+    "L6"
+  ],
+  "families": [
+    "G01",
+    "G02",
+    "G03",
+    "G04",
+    "G05"
+  ],
+  "language_modes": [
+    "EN_ONLY",
+    "EN_ZH_MIX",
+    "ZH_EN_MIX",
+    "ZH_ONLY"
+  ],
+  "notes": "Attack cases are stored as individual JSON files under each level directory. This directory is the source of truth."
+}
