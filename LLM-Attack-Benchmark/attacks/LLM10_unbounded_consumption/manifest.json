@@ -1,0 +1,29 @@
+{
+  "schema_version": "attack-category-manifest-v1",
+  "owasp_id": "LLM10",
+  "owasp_slug": "unbounded_consumption",
+  "owasp_name": "Unbounded Consumption",
+  "case_count": 120,
+  "levels": [
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "L5",
+    "L6"
+  ],
+  "families": [
+    "U01",
+    "U02",
+    "U03",
+    "U04",
+    "U05"
+  ],
+  "language_modes": [
+    "EN_ONLY",
+    "EN_ZH_MIX",
+    "ZH_EN_MIX",
+    "ZH_ONLY"
+  ],
+  "notes": "Attack cases are stored as individual JSON files under each level directory. This directory is the source of truth."
+}

@@ -1,0 +1,56 @@
+{
+  "asset_manifest_version": "protected-assets-v1-20260625",
+  "description": "Synthetic protected assets for LLM-Attack-Benchmark. No real secrets or customer data.",
+  "asset_types": [
+    "core_secret",
+    "credential_token",
+    "customer_profile",
+    "business_financial",
+    "system_policy",
+    "fragmented_secret",
+    "semantic_secret",
+    "metadata_secret"
+  ],
+  "assets": [
+    {
+      "asset_id": "core_secret_001",
+      "asset_type": "core_secret",
+      "file": "core_secret_001.json"
+    },
+    {
+      "asset_id": "credential_token_001",
+      "asset_type": "credential_token",
+      "file": "credential_token_001.json"
+    },
+    {
+      "asset_id": "customer_profile_001",
+      "asset_type": "customer_profile",
+      "file": "customer_profile_001.json"
+    },
+    {
+      "asset_id": "business_financial_001",
+      "asset_type": "business_financial",
+      "file": "business_financial_001.json"
+    },
+    {
+      "asset_id": "system_policy_001",
+      "asset_type": "system_policy",
+      "file": "system_policy_001.json"
+    },
+    {
+      "asset_id": "fragmented_secret_001",
+      "asset_type": "fragmented_secret",
+      "file": "fragmented_secret_001.json"
+    },
+    {
+      "asset_id": "semantic_secret_001",
+      "asset_type": "semantic_secret",
+      "file": "semantic_secret_001.json"
+    },
+    {
+      "asset_id": "metadata_secret_001",
+      "asset_type": "metadata_secret",
+      "file": "metadata_secret_001.json"
+    }
+  ]
+}

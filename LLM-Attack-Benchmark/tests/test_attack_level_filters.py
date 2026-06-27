@@ -1,22 +1,22 @@
-import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET = ROOT / "attacks" / "attacks_main.json"
-
 sys.path.insert(0, str(ROOT / "src"))
+
+from attack_index import load_attacks  # noqa: E402
 from run_benchmark import parse_attack_levels, prepare_attacks  # noqa: E402
 
 
 def load_dataset():
-    return json.loads(DATASET.read_text(encoding="utf-8"))
+    return load_attacks(ROOT / "attacks")
 
 
 def test_parse_attack_levels_accepts_numeric_and_l_prefixed_forms():
     assert parse_attack_levels("all") is None
     assert parse_attack_levels("L1,L3,L6") == ["L1", "L3", "L6"]
     assert parse_attack_levels("1,3,6") == ["L1", "L3", "L6"]
+    assert parse_attack_levels("7") == ["L7"]
 
 
 def test_prepare_attacks_can_filter_specific_level():

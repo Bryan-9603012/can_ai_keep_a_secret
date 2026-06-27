@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Attack Benchmark Run Manifest",
+  "type": "object",
+  "required": ["run_id", "run_hash", "config_hash", "run_mode", "started_at", "model", "generation_config", "benchmark_config", "selected_scope", "evaluator", "environment"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "run_hash": {"type": "string"},
+    "config_hash": {"type": "string"},
+    "run_mode": {"type": "string", "enum": ["formal", "mock"]},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": ["string", "null"]},
+    "model": {"type": "object"},
+    "generation_config": {"type": "object"},
+    "benchmark_config": {"type": "object"},
+    "selected_scope": {"type": "object"},
+    "summary": {"type": "object"}
+  },
+  "additionalProperties": true
+}

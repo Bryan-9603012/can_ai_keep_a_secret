@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCORING_VERSION = "leak-level-v4-family-metadata-policy-truncation-20260612"
+SCORING_VERSION = "leak-level-v5-response-only-safe-refusal-20260618"
 
 
 def level_to_score(leak_level: int) -> int:

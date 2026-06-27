@@ -1,10 +1,11 @@
 """
-LLM Attack Benchmark - one-click interactive Ollama runner.
+LLM Attack Benchmark - one-click interactive local/cloud runner.
 
 Design:
 - Windows double-click entry: install.bat -> install_and_run.ps1 -> this script.
 - Arrow-key menu, Enter confirm, Esc returns to previous layer.
-- First select model scope, benchmark scope, generation max_tokens, then run count.
+- First select model source: Local Ollama or Cloud OpenAI-compatible API.
+- Then select model scope, benchmark scope, generation max_tokens, then run count.
 - Benchmark scopes include full coverage, selected languages, selected levels, selected attacks, quick smoke test, and custom test.
 - max_tokens/num_predict is user-selectable from the interactive runner.
 - Missing models are pulled automatically.
@@ -31,7 +32,9 @@ ROOT = Path(__file__).resolve().parent
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 DEFAULT_MODEL = os.getenv("MODEL", "qwen2.5:0.5b")
 MODEL_GROUPS_PATH = ROOT / "configs" / "model_groups.json"
-ATTACKS_PATH = ROOT / "attacks" / "attacks_main.json"
+ATTACKS_PATH = ROOT / "attacks"
+sys.path.insert(0, str(ROOT / "src"))
+from attack_index import load_attacks as load_attack_index, available_owasp_ids as index_available_owasp_ids, available_levels as index_available_levels
 SIMPLE_MODE = False
 
 STYLE_CHOICES = [
@@ -74,10 +77,11 @@ class TestScope:
     styles: str = "all"
     attack_ids: str = "all"
     attack_levels: str = "all"
+    owasp_types: str = "all"
     limit_base_attacks: Optional[int] = None
 
     def to_cli_args(self) -> List[str]:
-        args = ["--styles", self.styles, "--attack-ids", self.attack_ids, "--attack-levels", self.attack_levels]
+        args = ["--styles", self.styles, "--attack-ids", self.attack_ids, "--attack-levels", self.attack_levels, "--owasp-types", self.owasp_types]
         if self.limit_base_attacks:
             args += ["--limit-base-attacks", str(self.limit_base_attacks)]
         return args
@@ -89,6 +93,30 @@ class GenerationSettings:
 
     def to_cli_args(self) -> List[str]:
         return ["--max-tokens", str(self.max_tokens)]
+
+
+@dataclass
+class CloudSettings:
+    provider: str = "openai-compatible"
+    base_url: str = ""
+    api_key_env: str = "OPENAI_API_KEY"
+    model: str = ""
+    request_timeout: float = 120
+    max_retries: int = 2
+    retry_backoff: float = 2
+
+    def to_cli_args(self) -> List[str]:
+        return [
+            "--model-source", "cloud",
+            "--provider", self.provider,
+            "--run-mode", "formal",
+            "--model", self.model,
+            "--base-url", self.base_url,
+            "--api-key-env", self.api_key_env,
+            "--request-timeout", str(self.request_timeout),
+            "--max-retries", str(self.max_retries),
+            "--retry-backoff", str(self.retry_backoff),
+        ]
 
 
 class BackToMenu(Exception):
@@ -290,16 +318,18 @@ def save_groups(groups: Dict[str, List[str]]) -> None:
     MODEL_GROUPS_PATH.write_text(json.dumps(groups, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_attack_catalog() -> List[dict]:
-    if not ATTACKS_PATH.exists():
-        return []
+def load_attack_rows() -> List[dict]:
     try:
-        data = json.loads(ATTACKS_PATH.read_text(encoding="utf-8"))
+        return load_attack_index(ATTACKS_PATH)
     except Exception:
         return []
+
+
+def load_attack_catalog() -> List[dict]:
+    rows = load_attack_rows()
     seen = set()
     catalog = []
-    for item in data:
+    for item in rows:
         base_id = str(item.get("attack_id") or item.get("family_id") or item.get("base_attack_id") or item.get("id", "").split("-", 1)[0]).upper()
         if not base_id or base_id in seen:
             continue
@@ -307,6 +337,7 @@ def load_attack_catalog() -> List[dict]:
         family_name = item.get("family_name") or item.get("category") or item.get("attack_name") or ""
         catalog.append({
             "attack_id": base_id,
+            "owasp_id": item.get("owasp_id") or str(item.get("primary_owasp", "")).split()[0],
             "family_name": family_name,
             "family_goal": item.get("family_goal", ""),
             "target_hint": item.get("target_hint", ""),
@@ -316,10 +347,32 @@ def load_attack_catalog() -> List[dict]:
     return catalog
 
 
+def available_owasp_types() -> List[str]:
+    vals = index_available_owasp_ids(load_attack_rows())
+    return vals or ["LLM01", "LLM02", "LLM07", "LLM10"]
+
+
+def available_attack_levels() -> List[str]:
+    vals = index_available_levels(load_attack_rows())
+    return vals or ["L1"]
+
+
+def lowest_available_level() -> str:
+    levels = available_attack_levels()
+    return levels[0] if levels else "L1"
+
+
+def level_description(level: str) -> tuple[str, str]:
+    for code, name, desc in LEVEL_CHOICES:
+        if code == level:
+            return name, desc
+    return "Dynamic Level", "由 attack.json 動態偵測到的測試階梯；新增階梯後 UI 會自動顯示"
+
+
 def show_attack_catalog(compact: bool = False) -> None:
     catalog = load_attack_catalog()
     if not catalog:
-        print("[WARN] 無法讀取 attacks_main.json 或攻擊清單為空。")
+        print("[WARN] 無法讀取 attacks/ 分類攻擊目錄或攻擊清單為空。")
         return
     print("\n可選 Family ID：")
     if compact:
@@ -328,12 +381,12 @@ def show_attack_catalog(compact: bool = False) -> None:
             line.append(item["attack_id"])
         print("  " + ", ".join(line))
         return
-    print("  ID    Target    Family")
-    print("  " + "─" * 66)
+    print("  ID    OWASP   Target    Family")
+    print("  " + "─" * 76)
     for item in catalog:
         hint = TARGET_HINT_LABELS.get(item.get("target_hint", ""), item.get("target_hint", "") or "-")
         name = item.get("family_name") or item.get("category") or item.get("description") or ""
-        print(f"  {item['attack_id']:<5} {hint:<9} {name}")
+        print(f"  {item['attack_id']:<5} {item.get('owasp_id',''):<7} {hint:<9} {name}")
 
 
 def normalize_attack_ids(raw: str) -> Optional[str]:
@@ -391,6 +444,46 @@ def ask_styles(default: str = "all") -> Optional[str]:
     return styles
 
 
+
+
+def normalize_owasp_types(raw: str) -> Optional[str]:
+    raw = (raw or "").strip()
+    if not raw or raw.lower() == "all":
+        return "all"
+    out: List[str] = []
+    for part in raw.split(","):
+        key = part.strip().upper()
+        if not key:
+            continue
+        if key.isdigit():
+            key = f"LLM{int(key):02d}"
+        if re.fullmatch(r"LLM\d{1,2}", key):
+            key = f"LLM{int(key[3:]):02d}"
+        valid = set(available_owasp_types())
+        if key not in valid:
+            print(f"[WARN] OWASP 類型不在目前 attacks/ 目錄中，已忽略：{part}")
+            continue
+        if key not in out:
+            out.append(key)
+    return ",".join(out) if out else None
+
+
+def ask_owasp_types(default: str = "all") -> Optional[str]:
+    available = available_owasp_types()
+    print("\n[OWASP 類型]")
+    print("  all = 目前 attacks/ 目錄中所有可用 OWASP 類型")
+    for item in available:
+        print(f"  {int(item[3:]):>2}. {item}")
+    raw = esc_input("請輸入 OWASP 類型，可用逗號多選，例如 all / LLM01,LLM02 / 1,2，Esc 返回", default)
+    if raw is None:
+        return None
+    types = normalize_owasp_types(raw)
+    if types is None:
+        print("[WARN] 沒有有效 OWASP 類型，請重新選擇。")
+        return ask_owasp_types(default)
+    return types
+
+
 def ask_attack_ids(default: str = "all") -> Optional[str]:
     show_attack_catalog()
     raw = esc_input("請輸入 Family ID，可用逗號多選，例如 all / A01,A03,A19 / 1,3,19，Esc 返回", default)
@@ -415,8 +508,9 @@ def normalize_attack_levels(raw: str) -> Optional[str]:
             continue
         if key.isdigit():
             key = f"L{int(key)}"
-        if not re.fullmatch(r"L[1-6]", key):
-            print(f"[WARN] 攻擊等級不支援，已忽略：{part}")
+        valid = set(available_attack_levels())
+        if not re.fullmatch(r"L\d+", key) or key not in valid:
+            print(f"[WARN] 攻擊等級不在目前 attacks/ 目錄中，已忽略：{part}")
             continue
         if key not in out:
             out.append(key)
@@ -424,11 +518,13 @@ def normalize_attack_levels(raw: str) -> Optional[str]:
 
 
 def ask_attack_levels(default: str = "all") -> Optional[str]:
+    levels_available = available_attack_levels()
     print("\n[攻擊等級]")
-    print("  all = 完整 L1~L6")
-    for idx, (code, name, desc) in enumerate(LEVEL_CHOICES, 1):
-        print(f"  {idx}. {code:<2} {name:<28} {desc}")
-    raw = esc_input("請輸入等級，可用逗號多選，例如 all / L1,L3,L6 / 1,3,6，Esc 返回", default)
+    print("  all = 目前 attacks/ 目錄中所有可用階梯")
+    for idx, code in enumerate(levels_available, 1):
+        name, desc = level_description(code)
+        print(f"  {idx}. {code:<3} {name:<28} {desc}")
+    raw = esc_input("請輸入等級，可用逗號多選，例如 all / L1,L3 / 1,3，Esc 返回", default)
     if raw is None:
         return None
     levels = normalize_attack_levels(raw)
@@ -449,17 +545,15 @@ def _split_filter(value: str) -> Optional[set[str]]:
 
 
 def estimate_cases(scope: TestScope) -> int:
-    """Estimate selected attack cases from attacks_main.json for clearer UI confirmation."""
-    if not ATTACKS_PATH.exists():
-        return 0
-    try:
-        rows = json.loads(ATTACKS_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    """Estimate selected attack cases from the clean attacks/ category directory for clearer UI confirmation."""
+    rows = load_attack_rows()
+    if not rows:
         return 0
 
     styles = _split_filter(scope.styles)
     levels = _split_filter(scope.attack_levels)
     attack_ids = _split_filter(scope.attack_ids)
+    owasp_types = _split_filter(scope.owasp_types)
 
     selected_bases: Optional[set[str]] = None
     if scope.limit_base_attacks:
@@ -477,6 +571,8 @@ def estimate_cases(scope: TestScope) -> int:
             continue
         if attack_ids is not None and base not in attack_ids:
             continue
+        if owasp_types is not None and str(row.get("owasp_id") or str(row.get("primary_owasp", "").split()[0])).upper() not in owasp_types:
+            continue
         if levels is not None and str(row.get("attack_level", "")).upper() not in levels:
             continue
         if styles is not None and str(row.get("prompt_style", "")) not in styles:
@@ -490,6 +586,7 @@ def describe_scope(scope: TestScope) -> List[str]:
         f"Scope      : {scope.label}",
         f"Families   : {scope.attack_ids}",
         f"Levels     : {scope.attack_levels}",
+        f"OWASP      : {scope.owasp_types}",
         f"Languages  : {scope.styles}",
         f"Base limit : {scope.limit_base_attacks or 'none'}",
         f"Est. cases : {estimate_cases(scope)}",
@@ -513,23 +610,25 @@ def choose_test_scope() -> TestScope:
     """
     while True:
         sel = tui_select("選擇測試範圍", [
-            SelectOption("Quick L1 baseline", "quick", "A01~A20 × L1 × English，先確認流程"),
-            SelectOption("Single level slice", "level", "A01~A20 × 指定 Lx × 指定語言"),
-            SelectOption("Family ladder", "ladder", "指定 Axx × L1~L6 × 指定語言"),
-            SelectOption("Family + level", "family_level", "指定 Axx × 指定 Lx × 指定語言"),
-            SelectOption("Full official", "full", "20 family × L1~L6 × 4 languages = 480 cases"),
-            SelectOption("Advanced custom", "custom", "手動設定 families / levels / languages / base limit"),
+            SelectOption("快速基準測試", "quick", "正式快速跑：目前最低可用階梯 × English"),
+            SelectOption("依測試強度選擇", "level", "指定目前 attacks/ 目錄中的 Lx 階梯"),
+            SelectOption("依 OWASP 類別測試", "owasp", "指定 LLM01~LLM10 與階梯"),
+            SelectOption("單一攻擊家族升階", "ladder", "指定 Axx，跑目前可用的全部階梯"),
+            SelectOption("單一家族 + 指定階梯", "family_level", "指定 Axx × 指定 Lx"),
+            SelectOption("完整 benchmark", "full", "所有 family × 所有可用階梯 × 所有語言"),
+            SelectOption("進階自訂", "custom", "手動設定 OWASP / family / level / language / limit"),
             SelectOption("返回", "__cancel__"),
         ], 0)
         if sel.value == "__cancel__":
             raise BackToMenu
 
         if sel.value == "quick":
-            scope = TestScope("Quick L1 baseline: A01~A20 × L1 × English", "quick_l1_en", "en_pure", "all", "L1", None)
+            quick_level = lowest_available_level()
+            scope = TestScope(f"快速基準測試：所有 family × {quick_level} × English", f"quick_{quick_level.lower()}_en", "en_pure", "all", quick_level, "all", None)
         elif sel.value == "full":
-            scope = TestScope("Full official: 20 families × L1~L6 × 4 languages", "full_mainline", "all", "all", "all", None)
+            scope = TestScope("完整 benchmark：所有 family × 所有可用階梯 × 所有語言", "full_mainline", "all", "all", "all", "all", None)
         elif sel.value == "level":
-            levels = ask_attack_levels("L1")
+            levels = ask_attack_levels(lowest_available_level())
             if levels is None:
                 continue
             styles = ask_styles("en_pure")
@@ -538,7 +637,22 @@ def choose_test_scope() -> TestScope:
             scope = TestScope(
                 f"Single level slice: all families / {levels} / {styles}",
                 f"levels_{scope_slug(levels)}__lang_{scope_slug(styles)}",
-                styles, "all", levels, None,
+                styles, "all", levels, "all", None,
+            )
+        elif sel.value == "owasp":
+            owasp_types = ask_owasp_types("LLM02")
+            if owasp_types is None:
+                continue
+            levels = ask_attack_levels(lowest_available_level())
+            if levels is None:
+                continue
+            styles = ask_styles("zh_pure")
+            if styles is None:
+                continue
+            scope = TestScope(
+                f"OWASP type slice: {owasp_types} / {levels} / {styles}",
+                f"owasp_{scope_slug(owasp_types)}__levels_{scope_slug(levels)}__lang_{scope_slug(styles)}",
+                styles, "all", levels, owasp_types, None,
             )
         elif sel.value == "ladder":
             attack_ids = ask_attack_ids("A01")
@@ -548,15 +662,15 @@ def choose_test_scope() -> TestScope:
             if styles is None:
                 continue
             scope = TestScope(
-                f"Family ladder: {attack_ids} / L1~L6 / {styles}",
+                f"Family ladder: {attack_ids} / all available levels / {styles}",
                 f"ladder_{scope_slug(attack_ids)}__lang_{scope_slug(styles)}",
-                styles, attack_ids, "all", None,
+                styles, attack_ids, "all", "all", None,
             )
         elif sel.value == "family_level":
             attack_ids = ask_attack_ids("A01")
             if attack_ids is None:
                 continue
-            levels = ask_attack_levels("L1")
+            levels = ask_attack_levels(lowest_available_level())
             if levels is None:
                 continue
             styles = ask_styles("en_pure")
@@ -565,9 +679,12 @@ def choose_test_scope() -> TestScope:
             scope = TestScope(
                 f"Family + level: {attack_ids} / {levels} / {styles}",
                 f"family_{scope_slug(attack_ids)}__levels_{scope_slug(levels)}__lang_{scope_slug(styles)}",
-                styles, attack_ids, levels, None,
+                styles, attack_ids, levels, "all", None,
             )
         elif sel.value == "custom":
+            owasp_types = ask_owasp_types("all")
+            if owasp_types is None:
+                continue
             attack_ids = ask_attack_ids("all")
             if attack_ids is None:
                 continue
@@ -587,12 +704,12 @@ def choose_test_scope() -> TestScope:
                 except ValueError:
                     print("[WARN] N 格式錯誤，改為不限制。")
                     limit = None
-            suffix = f"custom_family_{scope_slug(attack_ids)}__levels_{scope_slug(levels)}__lang_{scope_slug(styles)}"
+            suffix = f"custom_owasp_{scope_slug(owasp_types)}__family_{scope_slug(attack_ids)}__levels_{scope_slug(levels)}__lang_{scope_slug(styles)}"
             if limit:
                 suffix += f"__base{limit}"
             scope = TestScope(
-                f"Advanced custom: {attack_ids} / {levels} / {styles} / base_limit={limit or 'none'}",
-                suffix, styles, attack_ids, levels, limit,
+                f"Advanced custom: owasp={owasp_types} / family={attack_ids} / {levels} / {styles} / base_limit={limit or 'none'}",
+                suffix, styles, attack_ids, levels, owasp_types, limit,
             )
         else:
             continue
@@ -757,12 +874,24 @@ def run_command(cmd: List[str]) -> bool:
     return True
 
 
+def result_path_for_model_arg(model_arg: str, run_name: str) -> Path:
+    return ROOT / "results" / f"results_{safe_filename(model_arg)}__{safe_filename(run_name)}.csv"
+
+
 def result_path_for(model: str, run_name: str) -> Path:
-    return ROOT / "results" / f"results_{safe_filename('ollama:' + model)}__{safe_filename(run_name)}.csv"
+    return result_path_for_model_arg("ollama:" + model, run_name)
 
 
 def read_results(model: str, run_name: str) -> List[dict]:
     path = result_path_for(model, run_name)
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def read_results_by_model_arg(model_arg: str, run_name: str) -> List[dict]:
+    path = result_path_for_model_arg(model_arg, run_name)
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8-sig") as f:
@@ -807,6 +936,10 @@ def run_model(model: str, installed: List[str], run_count: int, scope: TestScope
         print("=" * 62)
         cmd = [
             sys.executable, "src/run_benchmark.py",
+            "--model-source", "local",
+            "--provider", "ollama",
+            "--run-mode", "formal",
+            "--local-mode", "interactive_local",
             "--model", f"ollama:{model}",
             "--ollama-url", OLLAMA_URL,
             "--attacks", str(ATTACKS_PATH),
@@ -888,6 +1021,150 @@ def run_quant_eval_interactive(installed: List[str]) -> bool:
         cmd += ["--limit-base-attacks", str(scope.limit_base_attacks)]
     return run_command(cmd)
 
+
+def ask_float(prompt: str, default: float, min_value: float = 0) -> float:
+    raw = esc_input(prompt, str(default))
+    if raw is None:
+        raise BackToMenu
+    try:
+        value = float(raw)
+    except ValueError:
+        print(f"[WARN] 格式錯誤，改用 {default}。")
+        return default
+    return max(min_value, value)
+
+
+def ask_int(prompt: str, default: int, min_value: int = 0, max_value: int = 20) -> int:
+    raw = esc_input(prompt, str(default))
+    if raw is None:
+        raise BackToMenu
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"[WARN] 格式錯誤，改用 {default}。")
+        return default
+    return max(min_value, min(max_value, value))
+
+
+def ask_cloud_settings() -> CloudSettings:
+    print("\n[雲端模型設定]")
+    print("目前支援 OpenAI-compatible /v1/chat/completions 格式。")
+    base_url = esc_input("Base URL，例如 https://api.openai.com/v1", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+    if base_url is None:
+        raise BackToMenu
+    api_key_env = esc_input("API Key 環境變數名稱，不要直接輸入 key", os.getenv("OPENAI_API_KEY_ENV", "OPENAI_API_KEY"))
+    if api_key_env is None:
+        raise BackToMenu
+    model = esc_input("雲端模型名稱，例如 gpt-4.1-mini / your-model-name", os.getenv("CLOUD_MODEL", "gpt-4.1-mini"))
+    if model is None:
+        raise BackToMenu
+    request_timeout = ask_float("Request timeout 秒數", 120, 1)
+    max_retries = ask_int("Max retries", 2, 0, 10)
+    retry_backoff = ask_float("Retry backoff base 秒數", 2, 0)
+    settings = CloudSettings(
+        base_url=(base_url or "").rstrip("/"),
+        api_key_env=(api_key_env or "OPENAI_API_KEY").strip(),
+        model=(model or "").strip(),
+        request_timeout=request_timeout,
+        max_retries=max_retries,
+        retry_backoff=retry_backoff,
+    )
+    if not os.getenv(settings.api_key_env, ""):
+        print(f"[WARN] 找不到環境變數 {settings.api_key_env}。正式執行前請先設定 API key。")
+        print("       PowerShell 範例：$env:%s=\"你的_API_KEY\"" % settings.api_key_env)
+    raw = esc_input("是否做一次最小連線測試？Y/n", "n")
+    if raw is not None and raw.strip().lower() in {"y", "yes"}:
+        test_cloud_connection(settings)
+    return settings
+
+
+def test_cloud_connection(settings: CloudSettings) -> bool:
+    print("\n[CHECK] Cloud API connection")
+    api_key = os.getenv(settings.api_key_env, "")
+    if not api_key:
+        print(f"[ERROR] API_KEY_MISSING: {settings.api_key_env} 未設定。")
+        return False
+    url = settings.base_url.rstrip("/") + "/chat/completions"
+    payload = {
+        "model": settings.model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "temperature": 0,
+        "max_tokens": 1,
+    }
+    try:
+        r = requests.post(url, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=payload, timeout=settings.request_timeout)
+    except requests.exceptions.RequestException as exc:
+        print(f"[ERROR] NETWORK_ERROR: {exc}")
+        return False
+    if r.status_code != 200:
+        print(f"[ERROR] HTTP_{r.status_code}: {r.text[:500]}")
+        return False
+    print("[OK] Cloud API connected.")
+    return True
+
+
+def run_cloud_model(settings: CloudSettings, run_count: int, scope: TestScope, generation: GenerationSettings) -> bool:
+    success = True
+    for i in range(1, run_count + 1):
+        base_name = f"{ATTACKS_PATH.stem}__{scope.run_name_suffix}"
+        run_name = base_name if run_count == 1 else f"{base_name}__run{i:02d}"
+        print("\n" + "=" * 62)
+        print(f"Cloud Model: {settings.model}")
+        print(f"Provider   : {settings.provider}")
+        print(f"Base URL   : {settings.base_url}")
+        print(f"Run        : {i}/{run_count}")
+        print(f"Scope      : {scope.label}")
+        print(f"max_tokens : {generation.max_tokens}")
+        print("=" * 62)
+        cmd = [
+            sys.executable, "src/run_benchmark.py",
+            "--attacks", str(ATTACKS_PATH),
+            "--run-name", run_name,
+        ]
+        cmd += settings.to_cli_args()
+        cmd += scope.to_cli_args()
+        cmd += generation.to_cli_args()
+        ok = run_command(cmd)
+        rows = read_results_by_model_arg(settings.model, run_name)
+        stats = summarize_rows(settings.model, rows) if rows else {"errors": 999, "valid": 0, "error_counts": {"RESULT_NOT_FOUND": 1}}
+        run_command([sys.executable, "src/report_generator.py"])
+        run_command([sys.executable, "src/plot_benchmark.py"])
+        if (not ok) or stats.get("valid", 0) == 0 or stats.get("errors", 0) > 0:
+            success = False
+            print("[WARN] 此雲端模型測試存在問題，請檢查 API、timeout、rate limit 或結果檔。")
+    return success
+
+
+def cloud_menu() -> None:
+    try:
+        settings = ask_cloud_settings()
+        scope = choose_test_scope()
+        generation = ask_max_tokens()
+        run_count = ask_run_count()
+    except BackToMenu:
+        return
+
+    print("\n[即將開始雲端測試]")
+    print(f"  Provider   : {settings.provider}")
+    print(f"  Model      : {settings.model}")
+    print(f"  Base URL   : {settings.base_url}")
+    print(f"  API Key Env: {settings.api_key_env}")
+    for line in describe_scope(scope):
+        print("  " + line)
+    print(f"  Runs       : {run_count}")
+    print(f"  max_tokens : {generation.max_tokens}")
+    print(f"  Timeout    : {settings.request_timeout}s")
+    print(f"  Retries    : {settings.max_retries}")
+    raw = esc_input("開始執行？Y/n", "Y")
+    if raw is None or raw.strip().lower() not in {"", "y", "yes"}:
+        return
+    ok = run_cloud_model(settings, run_count, scope, generation)
+    print("\n[OK] 雲端模型測試完成。" if ok else "\n[WARN] 雲端模型測試未成功完成。")
+    print(f"Results: {ROOT / 'results'}")
+    print(f"Reports: {ROOT / 'reports'}")
+    wait_key()
+
+
 def print_final_batch_summary(models: List[str], problem_models: List[str]) -> None:
     print("\n" + "=" * 62)
     print("批次測試完成")
@@ -902,12 +1179,13 @@ def print_final_batch_summary(models: List[str], problem_models: List[str]) -> N
     print("=" * 62)
 
 
-def main_menu(installed: List[str]) -> int:
+def local_main_menu(installed: List[str]) -> int:
     while True:
         selected = tui_select("LLM-Attack-Benchmark - Family Ladder Runner", [
             SelectOption("單一模型測試", "single", "最常用：輸入一個 Ollama model 後選測試範圍"),
             SelectOption("小型模型組測試", "small", "configs/model_groups.json: small_models"),
             SelectOption("中型模型組測試", "medium", "configs/model_groups.json: medium_models"),
+            SelectOption("自訂模型清單", "custom_models", "用逗號輸入多個 Ollama models，一次測試"),
             SelectOption("量化版本比較", "quant", "baseline vs quantized，同一 scope 對照"),
             SelectOption("管理模型組", "manage", "新增、移除、查看 small / medium 清單"),
             SelectOption("離開", "__cancel__"),
@@ -939,6 +1217,13 @@ def main_menu(installed: List[str]) -> int:
                 models = group_menu("small_models", "小型模型組測試", installed)
             elif selected.value == "medium":
                 models = group_menu("medium_models", "中型模型組測試", installed)
+            elif selected.value == "custom_models":
+                raw_models = esc_input("請輸入模型清單，使用逗號分隔，例如 gemma3:1b,gemma3:4b,qwen2.5:0.5b", DEFAULT_MODEL)
+                if raw_models is None:
+                    raise BackToMenu
+                models = [m.strip() for m in raw_models.split(",") if m.strip()]
+                if not models:
+                    models = [DEFAULT_MODEL]
             elif selected.value == "single":
                 value = esc_input("請輸入模型名稱，例如 qwen2.5:0.5b / gemma3:1b", DEFAULT_MODEL)
                 if value is None:
@@ -974,6 +1259,124 @@ def main_menu(installed: List[str]) -> int:
         print_final_batch_summary(models or [], problem_models)
         wait_key()
 
+
+
+def latest_run_dirs(limit: int = 5) -> List[Path]:
+    base = ROOT / "runs"
+    if not base.exists():
+        return []
+    dirs = [p for p in base.glob("*/*") if p.is_dir()]
+    dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return dirs[:limit]
+
+
+def show_latest_runs() -> None:
+    runs = latest_run_dirs()
+    print("\n[最近 Run]")
+    if not runs:
+        print("  尚無 runs/ 紀錄。")
+        wait_key()
+        return
+    for idx, path in enumerate(runs, 1):
+        manifest = path / "run_manifest.json"
+        label = path.name
+        model = ""
+        mode = path.parent.name
+        if manifest.exists():
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+                model = data.get("model", {}).get("model_name", "")
+                mode = data.get("run_mode", mode)
+                summary = data.get("summary", {}) or {}
+                label += f" | model={model} | safety={summary.get('safety_score', '')}% | reliability={summary.get('reliability_score', '')}%"
+            except Exception:
+                pass
+        print(f"  {idx}. [{mode}] {label}")
+        print(f"     report: {path / 'report.md'}")
+    wait_key()
+
+
+def user_mode_menu(installed: Optional[List[str]]) -> Optional[List[str]]:
+    while True:
+        selected = tui_select("User Mode - 一般使用者模式", [
+            SelectOption("本地模型 / Ollama", "local", "快速開始、OWASP 測試、模型比較"),
+            SelectOption("雲端模型 / Cloud API", "cloud", "OpenAI-compatible API，需要 API key env"),
+            SelectOption("查看最近一次結果", "latest", "打開 runs/ 中最近的 report 路徑"),
+            SelectOption("返回主選單", "__cancel__"),
+        ], 0)
+        if selected.value == "__cancel__":
+            return installed
+        if selected.value == "local":
+            if installed is None:
+                installed = check_ollama()
+            if installed is None:
+                print("[FAIL] Ollama 無法連線。請確認 Ollama 已啟動，或手動執行 ollama serve。")
+                wait_key()
+                continue
+            local_main_menu(installed)
+        elif selected.value == "cloud":
+            cloud_menu()
+        elif selected.value == "latest":
+            show_latest_runs()
+    return installed
+
+
+def developer_mode_menu() -> None:
+    while True:
+        selected = tui_select("Developer Mode - 開發者模式", [
+            SelectOption("Preflight Check 正式實驗前檢查", "preflight", "validate + dry-run + mock smoke"),
+            SelectOption("Validate attack.json", "validate", "只檢查 attack schema，不呼叫模型"),
+            SelectOption("Mock Smoke Test", "smoke", "最小端到端流程測試，不納入正式統計"),
+            SelectOption("Dry-run 正式實驗範圍", "dry", "預覽正式範圍，不呼叫模型"),
+            SelectOption("查看最近 Run", "latest", "查看 runs/formal 或 runs/mock"),
+            SelectOption("返回主選單", "__cancel__"),
+        ], 0)
+        if selected.value == "__cancel__":
+            return
+        if selected.value == "validate":
+            run_command([sys.executable, "src/run_benchmark.py", "--validate-attacks", "--run-mode", "mock", "--attacks", str(ATTACKS_PATH)])
+            wait_key()
+        elif selected.value == "smoke":
+            run_command([sys.executable, "src/run_benchmark.py", "--preset", "mock_smoke"])
+            wait_key()
+        elif selected.value == "dry":
+            try:
+                scope = choose_test_scope()
+            except BackToMenu:
+                continue
+            cmd = [sys.executable, "src/run_benchmark.py", "--dry-run", "--run-mode", "formal", "--attacks", str(ATTACKS_PATH)]
+            cmd += scope.to_cli_args()
+            run_command(cmd)
+            wait_key()
+        elif selected.value == "preflight":
+            print("\n[Preflight Check]")
+            ok1 = run_command([sys.executable, "src/run_benchmark.py", "--validate-attacks", "--run-mode", "mock", "--attacks", str(ATTACKS_PATH)])
+            ok2 = run_command([sys.executable, "src/run_benchmark.py", "--preset", "quick_formal", "--dry-run"])
+            ok3 = run_command([sys.executable, "src/run_benchmark.py", "--preset", "mock_smoke"])
+            print("\n[READY] 正式實驗前檢查通過。" if (ok1 and ok2 and ok3) else "\n[FAILED] Preflight 有失敗項目，請先修正。")
+            wait_key()
+        elif selected.value == "latest":
+            show_latest_runs()
+
+
+def main_menu(installed: Optional[List[str]]) -> int:
+    while True:
+        selected = tui_select("LLM-Attack-Benchmark", [
+            SelectOption("User Mode 一般使用者模式", "user", "跑正式 benchmark、看結果、匯出報告"),
+            SelectOption("Developer Mode 開發者模式", "developer", "驗證 attack.json、mock smoke、dry-run"),
+            SelectOption("查看最近 Run", "latest", "顯示 runs/ 中最近的實驗資料夾"),
+            SelectOption("離開", "__cancel__"),
+        ], 0)
+        if selected.value == "__cancel__":
+            return 0
+        if selected.value == "user":
+            installed = user_mode_menu(installed)
+        elif selected.value == "developer":
+            developer_mode_menu()
+        elif selected.value == "latest":
+            show_latest_runs()
+
+
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--simple", action="store_true", help="強制使用數字選單")
@@ -984,14 +1387,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     global SIMPLE_MODE
     args = parse_args(sys.argv[1:] if argv is None else argv)
     SIMPLE_MODE = args.simple
-    print("=== LLM-Attack-Benchmark - Family Ladder One-click Runner ===")
+    print("=== LLM-Attack-Benchmark - OWASP Local/Cloud Runner ===")
     print(f"Project root: {ROOT}")
     print(f"Ollama URL  : {OLLAMA_URL}")
     print(f"Attack set  : {ATTACKS_PATH}")
-    installed = check_ollama()
-    if installed is None:
-        print("[FAIL] Ollama 無法連線。請確認 install.bat 已啟動 Ollama，或手動執行 ollama serve。")
-        return 1
+    installed = None
+    print("[INFO] Ollama 會在進入 User Mode → 本地模型時才檢查；Developer Mode 不需要 Ollama。")
     return main_menu(installed)
 
 

@@ -1,0 +1,56 @@
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+credentials/
+*.pem
+*.key
+*.crt
+*.p12
+*.json.key
+
+# Logs
+logs/
+*.log
+
+# Benchmark outputs
+runs/*
+!runs/.gitkeep
+results/*
+!results/.gitkeep
+
+# Generated reports
+reports/*
+!reports/.gitkeep
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node, if used
+node_modules/
+dist/
+build/

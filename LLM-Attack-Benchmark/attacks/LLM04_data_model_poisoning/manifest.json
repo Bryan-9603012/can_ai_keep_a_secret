@@ -1,0 +1,11 @@
+{
+  "schema_version": "attack-category-manifest-v1",
+  "owasp_id": "LLM04",
+  "owasp_slug": "data_model_poisoning",
+  "owasp_name": "Data Model Poisoning",
+  "case_count": 0,
+  "levels": [],
+  "families": [],
+  "language_modes": [],
+  "notes": "Attack cases are stored as individual JSON files under each level directory. This directory is the source of truth."
+}
